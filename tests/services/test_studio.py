@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from notebooklm_tools.core.errors import RPCError
+from notebooklm_tools.core.errors import RPCError, ResourceExhaustedError
 from notebooklm_tools.services.errors import ServiceError, ValidationError
 from notebooklm_tools.services.studio import (
     VALID_ARTIFACT_TYPES,
@@ -163,6 +163,36 @@ class TestCreateArtifact:
                 video_format="cinematic",
                 video_style_prompt="storybook",
             )
+
+    def test_resource_exhausted_gives_retry_hint(self, mock_client):
+        """ResourceExhaustedError wraps with user-friendly retry message."""
+        mock_client.create_infographic.side_effect = ResourceExhaustedError(
+            "API error (code 8): Too many requests",
+            detail_type="type.googleapis.com/UserDisplayableError",
+            detail_data=["Too many requests"],
+        )
+        with pytest.raises(ServiceError) as exc_info:
+            create_artifact(mock_client, "nb-1", "infographic")
+
+        err = exc_info.value
+        assert "Rate limited" in err.user_message
+        assert "Wait" in err.user_message
+        assert err.hint is not None
+        assert "1-2 minutes" in err.hint
+
+    def test_rpc_error_wraps_with_detail(self, mock_client):
+        """Generic RPCError in create_artifact includes short detail name."""
+        mock_client.create_infographic.side_effect = RPCError(
+            "API error (code 7): PERMISSION_DENIED",
+            error_code=7,
+            detail_type="type.googleapis.com/SomeErrorDetail",
+        )
+        with pytest.raises(ServiceError) as exc_info:
+            create_artifact(mock_client, "nb-1", "infographic")
+
+        err = exc_info.value
+        assert "SomeErrorDetail" in err.user_message
+        assert "code 7" in err.user_message
 
 
 class TestNormalizeVideoStyle:
@@ -334,6 +364,24 @@ class TestReviseArtifact:
         assert "PERMISSION_DENIED" in err.user_message
         assert err.hint is not None
         assert "editable notebook you own" in err.hint
+
+    def test_rpc_error_code_8_gives_throttle_hint(self, mock_client):
+        """Code 8 on revise gives throttle-specific hint."""
+        mock_client.revise_slide_deck.side_effect = ResourceExhaustedError(
+            "API error (code 8): Rate limited",
+            detail_type="type.googleapis.com/UserDisplayableError",
+        )
+
+        with pytest.raises(ServiceError) as exc_info:
+            revise_artifact(
+                mock_client,
+                "art-123",
+                [{"slide": 1, "instruction": "Tighten the title"}],
+            )
+
+        err = exc_info.value
+        assert err.hint is not None
+        assert "1-2 minutes" in err.hint
 
 
 class TestRenameArtifact:

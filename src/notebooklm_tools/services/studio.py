@@ -16,7 +16,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from notebooklm_tools.core import constants
-from notebooklm_tools.core.errors import RPCError
+from notebooklm_tools.core.errors import RPCError, ResourceExhaustedError
 
 from ._compat import TypedDict
 from .errors import ServiceError, ValidationError
@@ -330,6 +330,26 @@ def create_artifact(
 
     except (ValidationError, ServiceError):
         raise
+    except ResourceExhaustedError as e:
+        raise ServiceError(
+            f"Failed to create {artifact_type}: {e}",
+            user_message=(
+                f"Rate limited — {e}. "
+                f"Wait a few minutes before retrying {artifact_type.replace('_', ' ')} creation."
+            ),
+            hint="NotebookLM limits how frequently artifacts can be created. "
+                 "Wait 1-2 minutes and try again.",
+        ) from e
+    except RPCError as e:
+        short_detail = e.detail_type.rsplit(".", 1)[-1] if e.detail_type else ""
+        formatted_error = (
+            f"Google API error code {e.error_code} ({short_detail})"
+            if short_detail else str(e)
+        )
+        raise ServiceError(
+            f"Failed to create {artifact_type}: {formatted_error}",
+            user_message=f"Could not create {artifact_type.replace('_', ' ')} — {formatted_error}.",
+        ) from e
     except Exception as e:
         logger.error("Studio create failed: %s: %s", type(e).__name__, e, exc_info=True)
         raise ServiceError(
@@ -756,7 +776,12 @@ def revise_artifact(
         formatted_error = (
             f"Google API error code {e.error_code} ({short_detail})" if short_detail else str(e)
         )
-        if e.error_code == 7:
+        if e.error_code == 8:
+            hint = (
+                "NotebookLM limits how frequently artifacts can be revised. "
+                "Wait 1-2 minutes and try again."
+            )
+        elif e.error_code == 7:
             hint = (
                 "Verify the artifact_id points to a completed slide deck in an editable "
                 "notebook you own. NotebookLM rejects revisions for view-only/shared decks."
