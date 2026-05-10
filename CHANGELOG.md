@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Cited-Only Filtering for Research** — Added support for filtering out non-cited sources during research imports. This includes a robust citation parser that handles standard markers (`[1]`), ranges (`[4-6]`), and bibliography extraction. The `research_status` polling output now also annotates sources with a `cited: bool` field for visibility.
+- **Cited-Only Filtering for Research** — Added support for filtering out non-cited sources during research imports. This includes a robust citation parser that handles standard markers (`[1]`), ranges (`[4-6]`), and bibliography extraction. The `research_status` polling output now also annotates sources with a `cited: bool` field for visibility. Thanks to **@zxyasfas** for the contribution (PR #188)!
 
 ### Fixed
 
