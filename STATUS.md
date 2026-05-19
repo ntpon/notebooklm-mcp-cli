@@ -1,13 +1,14 @@
 ---
-status: experimental
+status: active
 last-reviewed: 2026-05-19
-one-liner: "Vendored fork of jacob-bd/notebooklm-mcp-cli (NotebookLM CLI `nlm` + MCP server, ~35 tools). Saved copy for ai-factory orchestration. No local modifications yet."
+one-liner: "Vendored fork of jacob-bd/notebooklm-mcp-cli (NotebookLM CLI `nlm` + MCP server, ~35 tools). Installed on DGX, registered as Claude Code MCP server. Auth pending."
 successor: null
 predecessor: null
-tech: "Python ≥3.10, Playwright (browser automation against NotebookLM web UI), MCP server (stdio)"
+tech: "Python ≥3.11, Chromium + CDP for auth cookies, MCP server (stdio via fastmcp)"
 upstream: "https://github.com/jacob-bd/notebooklm-mcp-cli"
 fork: "https://github.com/ntpon/notebooklm-mcp-cli"
-synced-at-tag: "v0.6.10"
+installed-version: "v0.6.10"
+upstream-pull-policy: "manual-only — review CHANGELOG before each pull; no auto-update"
 ---
 
 # Status notes
@@ -35,7 +36,21 @@ git merge upstream/main       # merge commit
 
 ## Install (for reference)
 ```bash
-uv tool install notebooklm-mcp-cli      # from PyPI (upstream)
-# or, to use this fork:
-cd ~/code/works/tools/apzilon-notebooklm-mcp-cli && uv tool install .
+# Installed via: cd ~/code/works/tools/apzilon-notebooklm-mcp-cli && uv tool install .
+# Binaries: /home/ntpon/.local/bin/{nlm, notebooklm-mcp}
+# MCP registered: ~/.claude.json → mcpServers.notebooklm-mcp (user scope)
+# Verified: `claude mcp list` shows ✓ Connected
 ```
+
+## Security audit (2026-05-19, v0.6.10)
+- URLs hit: only google.com / notebooklm.google.com / pypi.org (version probe). No third-party endpoints.
+- No telemetry libs (posthog/sentry/mixpanel/etc).
+- No `exec`/`eval` of dynamic code. `subprocess.run` is only for invoking other CLIs (claude/codex/pbcopy).
+- Auth: stored at `~/.notebooklm-mcp-cli/{auth.json, profiles/<name>/cookies.json}`, mode 0o700 (user-only).
+- Deps: httpx, pydantic, typer, rich, fastmcp, websocket-client — all mainstream.
+
+## Auth (NOT YET DONE)
+DGX is headless (no DISPLAY). Three paths:
+1. **SSH X11 from MacBook** — run `nlm login` on DGX, Chrome paints on MacBook
+2. **Login on Mac/MacBook, copy `~/.notebooklm-mcp-cli/` to DGX** — simplest one-shot
+3. **CDP URL pointing to Mac mini BrowserOS Chrome** via SSH tunnel: `nlm login --cdp-url http://127.0.0.1:18800`
