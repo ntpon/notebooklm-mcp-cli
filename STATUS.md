@@ -1,7 +1,7 @@
 ---
 status: active
 last-reviewed: 2026-05-19
-one-liner: "Vendored fork of jacob-bd/notebooklm-mcp-cli (NotebookLM CLI `nlm` + MCP server, ~35 tools). Installed on DGX, registered as Claude Code MCP server. Auth pending."
+one-liner: "Vendored fork of jacob-bd/notebooklm-mcp-cli (NotebookLM CLI `nlm` + MCP server, ~35 tools). Installed on DGX, registered as Claude Code MCP server, auth: art.testinggame@gmail.com."
 successor: null
 predecessor: null
 tech: "Python ≥3.11, Chromium + CDP for auth cookies, MCP server (stdio via fastmcp)"
@@ -9,6 +9,8 @@ upstream: "https://github.com/jacob-bd/notebooklm-mcp-cli"
 fork: "https://github.com/ntpon/notebooklm-mcp-cli"
 installed-version: "v0.6.10"
 upstream-pull-policy: "manual-only — review CHANGELOG before each pull; no auto-update"
+auth-account: "art.testinggame@gmail.com (per account-consolidation memory, 2026-05-15)"
+chromium-binary: "~/.local/bin/chromium → Playwright chromium-1224 (NOT snap chromium)"
 ---
 
 # Status notes
@@ -49,8 +51,31 @@ git merge upstream/main       # merge commit
 - Auth: stored at `~/.notebooklm-mcp-cli/{auth.json, profiles/<name>/cookies.json}`, mode 0o700 (user-only).
 - Deps: httpx, pydantic, typer, rich, fastmcp, websocket-client — all mainstream.
 
-## Auth (NOT YET DONE)
-DGX is headless (no DISPLAY). Three paths:
-1. **SSH X11 from MacBook** — run `nlm login` on DGX, Chrome paints on MacBook
-2. **Login on Mac/MacBook, copy `~/.notebooklm-mcp-cli/` to DGX** — simplest one-shot
-3. **CDP URL pointing to Mac mini BrowserOS Chrome** via SSH tunnel: `nlm login --cdp-url http://127.0.0.1:18800`
+## Auth (DONE 2026-05-19)
+- Account: `art.testinggame@gmail.com` (consolidated AI service account)
+- Profile: `default` at `~/.notebooklm-mcp-cli/profiles/default/cookies.json`
+- 42 cookies extracted, CSRF token captured, auto-refresh enabled
+- Verified: `nlm login --check` ✓, `nlm notebook list` returns valid JSON
+
+### How auth was completed (workaround for snap chromium)
+The DGX has snap chromium at `/snap/bin/chromium`, which **does NOT work** with `nlm login`:
+- Snap chromium architecture forces single-instance per user (SingletonLock conflict)
+- Zygote startup fails with "Broken pipe" under nlm's launch args
+- These are fundamental snap confinement issues, not fixable via flags
+
+**Fix:** symlinked `~/.local/bin/chromium` → Playwright's bundled chromium
+```bash
+ln -sf /home/ntpon/.cache/ms-playwright/chromium-1224/chrome-linux/chrome ~/.local/bin/chromium
+```
+Because `~/.local/bin` precedes `/snap/bin` in PATH, `nlm` now picks the Playwright binary and launches cleanly. Playwright keeps chromium-1224 updated as part of its own update cycle — no extra maintenance.
+
+### Login flow (for next time / different machine)
+1. Need X session: DGX has GNOME on `:1`, accessible via x11vnc → SSH tunnel from MacBook (`ssh -L 5900:localhost:5900 ntpon@dgx`, then `open vnc://localhost:5900`).
+2. From DGX shell with `DISPLAY=:1 XAUTHORITY=/run/user/1000/gdm/Xauthority`, run `nlm login` — Chromium spawns on display :1, user signs in via VNC view.
+3. Cookies stable for ~1 week, auto-refresh via stored Chrome profile.
+
+## Claude Code MCP integration
+```
+~/.claude.json → mcpServers.notebooklm-mcp = {type: stdio, command: "notebooklm-mcp"}
+```
+`claude mcp list` → `✓ Connected`. Tools (notebook_list, source_add, audio creation, etc.) become available in next Claude Code session.
